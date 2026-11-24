@@ -153,9 +153,12 @@ export default function Page() {
   return (
     <div className="wrap">
       <header>
-        <div>
-          <h1>Filing Register</h1>
-          <div className="sub">Every year&rsquo;s return, computation, balance sheet and audit report, stored in Drive.</div>
+        <div className="brand">
+          <div className="mark">FR</div>
+          <div>
+            <h1>Filing Register</h1>
+            <div className="sub">Every year&rsquo;s return, computation, balance sheet and audit report, stored in Drive.</div>
+          </div>
         </div>
         {selectedPersonId && (
           <button className="addbtn" onClick={() => setModal({ kind: "addYear" })}>
