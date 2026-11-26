@@ -173,6 +173,15 @@ export async function ensureYearFolder(personId: string, ay: string, fy: string)
   return created.data.id!;
 }
 
+/** Renames a year folder and updates its FY description in place (used when editing an existing year). */
+export async function renameYearFolder(folderId: string, ay: string, fy: string): Promise<void> {
+  const drive = getDrive();
+  await drive.files.update({
+    fileId: folderId,
+    requestBody: { name: `AY ${ay}`, description: `FY ${fy}` },
+  });
+}
+
 /** Uploads a document into a year's folder, replacing any existing file of the same docType. */
 export async function uploadDoc(
   folderId: string,

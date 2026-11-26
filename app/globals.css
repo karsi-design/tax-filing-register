@@ -75,6 +75,10 @@ h1{
   border:1px solid var(--border);
 }
 .addbtn.ghost:hover{border-color:var(--accent-dim);color:var(--accent);background:var(--surface-raised);}
+.addbtn.ghost.active{border-color:var(--accent);color:var(--accent);background:rgba(200,160,89,.08);}
+
+.headerActions{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+.headerActions .addbtn{width:100%;text-align:center;}
 
 .personbar{display:flex;align-items:center;gap:12px;margin-top:24px;flex-wrap:wrap;}
 .personbar label{font-size:12.5px;color:var(--text-muted);}
@@ -122,7 +126,10 @@ h1{
   border-right:1px solid var(--border-soft);
   display:flex;flex-direction:column;justify-content:center;
   box-sizing:border-box;
+  transition:background .15s;
 }
+.yearcell.editable{cursor:pointer;}
+.yearcell.editable:hover{background:var(--surface-raised);}
 .yearcell .ay{font-family:var(--serif);font-size:19px;font-weight:500;line-height:1.2;white-space:nowrap;color:var(--text);}
 .yearcell .fy{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.2;white-space:nowrap;}
 

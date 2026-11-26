@@ -14,6 +14,17 @@ type Doc = { fileId: string; name: string; mimeType: string; modifiedTime: strin
 type Record_ = { folderId: string; ay: string; fy: string; docs: Partial<Record<DocKey, Doc>> };
 type Person = { id: string; name: string };
 
+/** Given a "YYYY-YY" year string, returns the adjacent year in the given direction
+ *  (+1 for AY from FY, -1 for FY from AY). Returns "" if the input isn't a full,
+ *  valid "YYYY-YY" string yet (e.g. still being typed). */
+function deriveYear(value: string, direction: 1 | -1): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(value.trim());
+  if (!m) return "";
+  const start = parseInt(m[1], 10) + direction;
+  const end = (start + 1) % 100;
+  return `${start}-${String(end).padStart(2, "0")}`;
+}
+
 export default function Page() {
   const [people, setPeople] = useState<Person[] | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -22,10 +33,12 @@ export default function Page() {
   const [modal, setModal] = useState<
     | { kind: "doc"; record: Record_; docType: DocKey }
     | { kind: "addYear" }
+    | { kind: "editYear"; record: Record_ }
     | { kind: "addPerson" }
     | null
   >(null);
   const [busy, setBusy] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   async function loadPeople(selectId?: string) {
     try {
@@ -148,6 +161,26 @@ export default function Page() {
     }
   }
 
+  async function handleEditYear(record: Record_, ay: string, fy: string) {
+    if (!selectedPersonId) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/years", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: record.folderId, ay, fy }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not update year");
+      await loadRecords(selectedPersonId);
+      setModal(null);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const selectedPerson = people?.find((p) => p.id === selectedPersonId) ?? null;
 
   return (
@@ -161,9 +194,17 @@ export default function Page() {
           </div>
         </div>
         {selectedPersonId && (
-          <button className="addbtn" onClick={() => setModal({ kind: "addYear" })}>
-            + Add filing year
-          </button>
+          <div className="headerActions">
+            <button className="addbtn" onClick={() => setModal({ kind: "addYear" })}>
+              + Add filing year
+            </button>
+            <button
+              className={"addbtn ghost" + (editMode ? " active" : "")}
+              onClick={() => setEditMode((v) => !v)}
+            >
+              {editMode ? "Done editing" : "Edit"}
+            </button>
+          </div>
         )}
       </header>
 
@@ -218,7 +259,10 @@ export default function Page() {
             </div>
             {records.map((rec) => (
               <div className="row" key={rec.folderId}>
-                <div className="yearcell">
+                <div
+                  className={"yearcell" + (editMode ? " editable" : "")}
+                  onClick={() => editMode && setModal({ kind: "editYear", record: rec })}
+                >
                   <div className="ay">AY {rec.ay}</div>
                   <div className="fy">FY {rec.fy}</div>
                 </div>
@@ -260,6 +304,14 @@ export default function Page() {
       )}
       {modal?.kind === "addYear" && (
         <AddYearModal busy={busy} onClose={() => setModal(null)} onSave={handleAddYear} />
+      )}
+      {modal?.kind === "editYear" && (
+        <EditYearModal
+          record={modal.record}
+          busy={busy}
+          onClose={() => setModal(null)}
+          onSave={(ay, fy) => handleEditYear(modal.record, ay, fy)}
+        />
       )}
       {modal?.kind === "addPerson" && (
         <AddPersonModal busy={busy} onClose={() => setModal(null)} onSave={handleAddPerson} />
@@ -399,6 +451,17 @@ function AddYearModal({
   const [ay, setAy] = useState("");
   const [fy, setFy] = useState("");
 
+  function handleAyChange(v: string) {
+    setAy(v);
+    const derivedFy = deriveYear(v, -1);
+    if (derivedFy) setFy(derivedFy);
+  }
+  function handleFyChange(v: string) {
+    setFy(v);
+    const derivedAy = deriveYear(v, 1);
+    if (derivedAy) setAy(derivedAy);
+  }
+
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -407,11 +470,11 @@ function AddYearModal({
           <div className="newform">
             <div>
               <label>Assessment Year</label>
-              <input placeholder="2025-26" value={ay} onChange={(e) => setAy(e.target.value)} />
+              <input placeholder="2025-26" value={ay} onChange={(e) => handleAyChange(e.target.value)} />
             </div>
             <div>
               <label>Financial Year</label>
-              <input placeholder="2024-25" value={fy} onChange={(e) => setFy(e.target.value)} />
+              <input placeholder="2024-25" value={fy} onChange={(e) => handleFyChange(e.target.value)} />
             </div>
           </div>
           <div className="actions">
@@ -422,6 +485,65 @@ function AddYearModal({
               onClick={() => onSave(ay.trim(), fy.trim())}
             >
               Add year
+            </button>
+          </div>
+        </div>
+        <div className="closebar">
+          <button onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditYearModal({
+  record,
+  busy,
+  onClose,
+  onSave,
+}: {
+  record: Record_;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (ay: string, fy: string) => void;
+}) {
+  const [ay, setAy] = useState(record.ay);
+  const [fy, setFy] = useState(record.fy);
+
+  function handleAyChange(v: string) {
+    setAy(v);
+    const derivedFy = deriveYear(v, -1);
+    if (derivedFy) setFy(derivedFy);
+  }
+  function handleFyChange(v: string) {
+    setFy(v);
+    const derivedAy = deriveYear(v, 1);
+    if (derivedAy) setAy(derivedAy);
+  }
+
+  return (
+    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h2>Edit filing year</h2>
+        <div className="body">
+          <div className="newform">
+            <div>
+              <label>Assessment Year</label>
+              <input placeholder="2025-26" value={ay} onChange={(e) => handleAyChange(e.target.value)} />
+            </div>
+            <div>
+              <label>Financial Year</label>
+              <input placeholder="2024-25" value={fy} onChange={(e) => handleFyChange(e.target.value)} />
+            </div>
+          </div>
+          <div className="actions">
+            <button
+              className="primary"
+              style={{ flex: "none" }}
+              disabled={busy || !ay.trim() || !fy.trim()}
+              onClick={() => onSave(ay.trim(), fy.trim())}
+            >
+              Save changes
             </button>
           </div>
         </div>
